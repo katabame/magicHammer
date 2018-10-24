@@ -1,3 +1,4 @@
+import os
 import signal
 import sys
 import time
@@ -35,7 +36,8 @@ def index():
 	return render_template('index.html')
 
 if __name__ == "__main__":
-	connectionHandler = threading.Thread(target = app.run(debug=False, host='0.0.0.0', port=80), daemon = True)
+	port = int(os.environ.get("PORT", "5000"))
+	connectionHandler = threading.Thread(target = app.run(debug=False, host='0.0.0.0', port=port), daemon = True)
 	connectionHandler.start()
 	while True:
 		try:
