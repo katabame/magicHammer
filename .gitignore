@@ -1,0 +1,7 @@
+\.vscode/
+__pycache__/
+Scripts/
+Lib/
+pip-selfcheck\.json
+pyvenv\.cfg
+prepros-6\.config
