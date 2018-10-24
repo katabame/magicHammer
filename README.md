@@ -1,5 +1,5 @@
 # magicHammer
-_Magical hammer for poke the Wumpus._
+_Magical hammer for poke the Wumpus._  
 magicHammer™ is web service for provide Discord build versions API.
 
 日本語のReadmeをお探しですか？ [こちらです](readme_ja.md) | Are you looking for English readme? This is the page what you are looking for.

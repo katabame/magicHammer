@@ -1,8 +1,8 @@
 # magicHammer
-_ウンパスをつつくための魔法のハンマー。_
+_ウンパスをつつくための魔法のハンマー。_  
 マジックハンマー™はDiscordのビルドバージョンAPIを提供するためのウェブサービスです。
 
-日本語のReadmeをお探しですか？ このページがお探しのものです。 | Are you looking for English readme? [It's here](readme.md)
+日本語のReadmeをお探しですか？ このページがお探しのものです。 | Are you looking for English readme? [It's here](README.md)
 
 ### えっ、あのDiscord Inc.さんかい？
 Discordサービスとして提供されることは何よりも素敵なことです、そうですよね？
