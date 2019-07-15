@@ -10,18 +10,13 @@ from concurrent.futures import Future, TimeoutError
 from pyppeteer import launch
 from enum import Enum
 
-"""
-DiscordVersionClient クラスはDiscordのバージョンを拾ってくるクライアントを定義する
-このクラスは "機能" として扱われる
-"""
 class DiscordVersionClient:
-	def get(self, taskQueue: queue.Queue):
+	"""
+	DiscordVersionClient class represents an interface of version fetcher.
+	"""
+	def get(self, taskQueue: queue):
 		pass
 
-"""
-CachedDiscordVersionClient クラスはバージョンが情報がキャッシュされた DiscordVersionClient を実装する
-このクラスは別のDiscordVersionClient を呼び出し、その結果を指定された時間キャッシュする
-"""
 class CachedDiscordVersionClient(DiscordVersionClient):
 	DEFAULT_TIMEOUT = timedelta(minutes = 1)
 
@@ -38,12 +33,12 @@ class CachedDiscordVersionClient(DiscordVersionClient):
 			self.cached = self.delegation.get(taskQueue)
 		return self.cached
 
-"""
-SimpleDiscordVersionClient クラスはDiscordVersionClient を実装する
-このクラスは確実に discordapp.com からバージョン情報を抜き出してくる
-キャッシュ機能を付ける場合はDiscordVersionClientの別の実装を使用する
-"""
 class SimpleDiscordVersionClient(DiscordVersionClient):
+	"""
+	SimpleDiscordVersionClient class implements DiscordVersionClient interface.
+	Method "get" fetches version data from discordapp.com every time.
+	For performance, use CachedDiscordVersionClient.
+	"""
 
 	def __init__(self, url: str):
 		self.url = url
