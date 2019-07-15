@@ -13,6 +13,10 @@ from client import (
     STABLE
 )
 
+DEBUG = bool(os.environ.get("DEBUG", "False"))
+HOST = str(os.environ.get("HOST", "0.0.0.0"))
+PORT = int(os.environ.get("PORT", "5000"))
+
 app = Flask(__name__)
 loop = asyncio.get_event_loop()
 
@@ -46,17 +50,17 @@ def index():
     return render_template('index.html')
 
 
+def serve():
+    app.run(debug=False, host=HOST, port=PORT)
+
+
 if __name__ == "__main__":
-    debug = bool(os.environ.get("DEBUG", "False"))
-    host = str(os.environ.get("HOST", "0.0.0.0"))
-    port = int(os.environ.get("PORT", "5000"))
     web_thread = threading.Thread(daemon=True,
                                   name="Web Handler Thread",
-                                  target=lambda: app.run(debug=False, host=host, port=port))
+                                  target=serve)
     web_thread.start()
-
     print("Running asyncio event loop...")
-    loop.set_debug(debug)
+    loop.set_debug(DEBUG)
     try:
         loop.run_forever()
     except KeyboardInterrupt:
