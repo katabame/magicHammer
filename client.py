@@ -1,109 +1,94 @@
 import asyncio
 import unittest
-import weakref
-import time
-import queue
+import pyppeteer
 
-from typing import Dict, List
+from concurrent.futures import Future
 from datetime import datetime, timedelta
-from concurrent.futures import Future, TimeoutError
-from pyppeteer import launch
-from enum import Enum
+from typing import Dict, List
 
 
-class DiscordVersionClient:
+class VersionFetcher:
     """
-    DiscordVersionClient class represents an interface of version fetcher.
+    VersionFetcher class represents an interface of version fetcher.
     """
 
-    def get(self, taskQueue: queue):
+    def get(self):
         pass
 
 
-class CachedDiscordVersionClient(DiscordVersionClient):
+class CachedVersionFetcher(VersionFetcher):
     DEFAULT_TIMEOUT = timedelta(minutes=1)
 
-    def __init__(self, delegation: DiscordVersionClient, timeout: timedelta = DEFAULT_TIMEOUT):
+    def __init__(self, delegation: VersionFetcher, timeout: timedelta = DEFAULT_TIMEOUT):
         self.delegation = delegation
         self.timeout = timeout
-        self.lastUpdated = datetime.now() - timeout
-        self.cached = None
+        self.last = datetime.now() - timeout
+        self.cache = None
 
-    def get(self, taskQueue: queue.Queue):
+    def get(self):
         currentTime = datetime.now()
-        if (currentTime - self.lastUpdated) > self.timeout:
-            self.lastUpdated = currentTime
-            self.cached = self.delegation.get(taskQueue)
-        return self.cached
+        if (currentTime - self.last) >= self.timeout:
+            self.cache = self.delegation.get()
+            self.last = currentTime
+        return self.cache
 
 
-class SimpleDiscordVersionClient(DiscordVersionClient):
+class VersionFetcherImpl(VersionFetcher):
     """
-    SimpleDiscordVersionClient class implements DiscordVersionClient interface.
+    VersionFetcherImpl class implements VersionFetcher interface.
     Method "get" fetches version data from discordapp.com every time.
-    For performance, use CachedDiscordVersionClient.
+    For performance, use CachedVersionFetcher.
     """
 
     def __init__(self, url: str):
         self.url = url
+        self.loop = asyncio.new_event_loop()
 
-    def get(self, taskQueue: queue.Queue):
-        return self.request(taskQueue)
-
-    def onConsoleMessage(self, msg: str):
-        log = [line[line.rfind(' ') + 1:] for line in msg.text.split(',')]
-        return {'release_channel': log[0], 'build_number': log[1], 'version_hash': log[2]}
-
-    def request(self, taskQueue: queue.Queue):
-        future = Future()
-
-        async def requestAsync(self, future):
-            browser = await launch(headless=True)
+    def get(self):
+        async def get_async(url):
+            browser = await pyppeteer.launch(headless=True)
             page = await browser.newPage()
+            result = Future()
 
-            page.once('console', lambda msg: future.set_result(
-                self.onConsoleMessage(msg)))
+            def handle_console(msg):
+                text = msg.text
+                if not ("Release Channel" in text
+                        and "Build Number" in text
+                        and "Version Hash" in text):
+                    return
 
-            await page.goto(self.url)
+                ks = ['release_channel', 'build_number', 'version_hash']
+                vs = [line[line.rfind(' ') + 1:]
+                      for line in text.split(',')]
+                result.set_result({k: v for k, v in zip(ks, vs)})
+
+            page.on('console', handle_console)
+            await page.goto(url)
             await browser.close()
-        while True:
-            try:
-                taskQueue.put(requestAsync(self, future), block=False)
-                break
-            except queue.Full:
-                time.sleep(1)
-        while True:
-            try:
-                return future.result(timeout=1)
-            except TimeoutError:
-                time.sleep(1)
+            return result
+
+        return self.loop.run_until_complete(get_async(self.url)).result(10)
 
 
-class DefaultDiscordVersionClients:
-    STABLE_NOCACHE = SimpleDiscordVersionClient('https://discordapp.com/login')
-    PTB_NOCACHE = SimpleDiscordVersionClient(
-        'https://ptb.discordapp.com/login')
-    CANARY_NOCACHE = SimpleDiscordVersionClient(
-        'https://canary.discordapp.com/login')
-    STABLE = CachedDiscordVersionClient(STABLE_NOCACHE)
-    PTB = CachedDiscordVersionClient(PTB_NOCACHE)
-    CANARY = CachedDiscordVersionClient(CANARY_NOCACHE)
+STABLE_NOCACHE = VersionFetcherImpl('https://discordapp.com/login')
+PTB_NOCACHE = VersionFetcherImpl('https://ptb.discordapp.com/login')
+CANARY_NOCACHE = VersionFetcherImpl('https://canary.discordapp.com/login')
+STABLE = CachedVersionFetcher(STABLE_NOCACHE)
+PTB = CachedVersionFetcher(PTB_NOCACHE)
+CANARY = CachedVersionFetcher(CANARY_NOCACHE)
 
 
-def testTemplate(self, target):
-    self.assertNotEqual(isinstance(target.value, DefaultDiscordVersionClients))
-    self.assertEqual(isinstance(target.value, DiscordVersionClient))
+class TestImpl(unittest.TestCase):
 
-
-class DefaultDiscordVersionClientsTest(unittest.TestCase):
-    def testStable(self):
-        testTemplate(self, DefaultDiscordVersionClients.STABLE)
-
-    def testPTB(self):
-        testTemplate(self, DefaultDiscordVersionClients.PTB)
-
-    def testCanary(self):
-        testTemplate(self, DefaultDiscordVersionClients.CANARY)
+    def testGet(self):
+        fetcher = VersionFetcherImpl('https://discordapp.com/login')
+        result = fetcher.get()
+        self.assertIsNotNone(result)
+        self.assertIsInstance(result, dict)
+        self.assertIn("release_channel", result)
+        self.assertIn("build_number", result)
+        self.assertIn("version_hash", result)
+        print(result)
 
 
 if __name__ == "__main__":
