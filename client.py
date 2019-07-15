@@ -1,8 +1,8 @@
 import asyncio
 import unittest
 import pyppeteer
+import threading
 
-from concurrent.futures import Future
 from datetime import datetime, timedelta
 from typing import Dict, List
 
@@ -12,8 +12,8 @@ class VersionFetcher:
     VersionFetcher class represents an interface of version fetcher.
     """
 
-    def get(self):
-        pass
+    async def get(self):
+        raise NotImplementedError()
 
 
 class CachedVersionFetcher(VersionFetcher):
@@ -25,10 +25,10 @@ class CachedVersionFetcher(VersionFetcher):
         self.last = datetime.now() - timeout
         self.cache = None
 
-    def get(self):
+    async def get(self):
         currentTime = datetime.now()
         if (currentTime - self.last) >= self.timeout:
-            self.cache = self.delegation.get()
+            self.cache = await self.delegation.get()
             self.last = currentTime
         return self.cache
 
@@ -42,32 +42,31 @@ class VersionFetcherImpl(VersionFetcher):
 
     def __init__(self, url: str):
         self.url = url
-        self.loop = asyncio.new_event_loop()
 
-    def get(self):
-        async def get_async(url):
-            browser = await pyppeteer.launch(headless=True)
-            page = await browser.newPage()
-            result = Future()
+    async def get(self):
+        print(f"Fetching from {self.url}...")
+        future = asyncio.get_event_loop().create_future()
+        browser = await pyppeteer.launch(headless=True)
+        page = await browser.newPage()
 
-            def handle_console(msg):
-                text = msg.text
-                if not ("Release Channel" in text
-                        and "Build Number" in text
-                        and "Version Hash" in text):
-                    return
+        def handle_console(msg):
+            if future.done():
+                return
+            text = msg.text
+            if not ("Release Channel" in text
+                    and "Build Number" in text
+                    and "Version Hash" in text):
+                return
 
-                ks = ['release_channel', 'build_number', 'version_hash']
-                vs = [line[line.rfind(' ') + 1:]
-                      for line in text.split(',')]
-                result.set_result({k: v for k, v in zip(ks, vs)})
+            ks = ['release_channel', 'build_number', 'version_hash']
+            vs = [line[line.rfind(' ') + 1:]
+                  for line in text.split(',')]
+            future.set_result({k: v for k, v in zip(ks, vs)})
 
-            page.on('console', handle_console)
-            await page.goto(url)
-            await browser.close()
-            return result
-
-        return self.loop.run_until_complete(get_async(self.url)).result(10)
+        page.on('console', handle_console)
+        await page.goto(self.url)
+        await browser.close()
+        return await future
 
 
 STABLE_NOCACHE = VersionFetcherImpl('https://discordapp.com/login')
@@ -81,8 +80,9 @@ CANARY = CachedVersionFetcher(CANARY_NOCACHE)
 class TestImpl(unittest.TestCase):
 
     def testGet(self):
+        loop: asyncio.BaseEventLoop = asyncio.get_event_loop()
         fetcher = VersionFetcherImpl('https://discordapp.com/login')
-        result = fetcher.get()
+        result = loop.run_until_complete(fetcher.get())
         self.assertIsNotNone(result)
         self.assertIsInstance(result, dict)
         self.assertIn("release_channel", result)

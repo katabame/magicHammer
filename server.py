@@ -6,35 +6,39 @@ import queue
 import threading
 import asyncio
 from flask import Flask, jsonify, render_template
-from client import DiscordVersionClient, DefaultDiscordVersionClients, SimpleDiscordVersionClient, CachedDiscordVersionClient
+
+from client import (
+    CANARY,
+    PTB,
+    STABLE
+)
 
 app = Flask(__name__)
-taskQueue = queue.Queue()
+loop = asyncio.get_event_loop()
 
 
-def fetch(endpoint: DiscordVersionClient):
-    assert isinstance(endpoint, DiscordVersionClient)
-    return jsonify(endpoint.get(taskQueue))
+def join(co):
+    return asyncio.run_coroutine_threadsafe(co, loop).result(10)
 
 
 @app.route('/api/stable.json', methods=['GET'])
-def fetchStable():
-    return fetch(DefaultDiscordVersionClients.STABLE)
+def fetch_stable():
+    return join(STABLE.get())
 
 
 @app.route('/api/ptb.json', methods=['GET'])
-def fetchPTB():
-    return fetch(DefaultDiscordVersionClients.PTB)
+def fetch_ptb():
+    return join(PTB.get())
 
 
 @app.route('/api/canary.json', methods=['GET'])
-def fetchCanary():
-    return fetch(DefaultDiscordVersionClients.CANARY)
+def fetch_canary():
+    return join(CANARY.get())
 
 
 @app.route('/api/all.json', methods=['GET'])
-def fetchAll():
-    return jsonify([DefaultDiscordVersionClients.STABLE.get(taskQueue), DefaultDiscordVersionClients.PTB.get(taskQueue), DefaultDiscordVersionClients.CANARY.get(taskQueue)])
+def fetch_all():
+    return jsonify([join(e.get()) for e in [STABLE, PTB, CANARY]])
 
 
 @app.route('/', methods=['GET'])
@@ -43,16 +47,17 @@ def index():
 
 
 if __name__ == "__main__":
+    debug = bool(os.environ.get("DEBUG", "False"))
+    host = str(os.environ.get("HOST", "0.0.0.0"))
     port = int(os.environ.get("PORT", "5000"))
-    connectionHandler = threading.Thread(target=app.run(
-        debug=False, host='0.0.0.0', port=port), daemon=True)
-    connectionHandler.start()
-    while True:
-        try:
-            task = taskQueue.get(block=False)
-            if task:
-                loop = asyncio.new_event_loop()
-                loop.run_until_complete(task)
-                loop.close()
-        except queue.Empty:
-            time.sleep(1)
+    web_thread = threading.Thread(daemon=True,
+                                  name="Web Handler Thread",
+                                  target=lambda: app.run(debug=False, host=host, port=port))
+    web_thread.start()
+
+    print("Running asyncio event loop...")
+    loop.set_debug(debug)
+    try:
+        loop.run_forever()
+    except KeyboardInterrupt:
+        loop.stop()
