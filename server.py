@@ -22,22 +22,22 @@ loop = asyncio.get_event_loop()
 
 
 def join(co):
-    return asyncio.run_coroutine_threadsafe(co, loop).result(10)
+    return asyncio.run_coroutine_threadsafe(co, loop).result(30)
 
 
 @app.route('/api/stable.json', methods=['GET'])
 def fetch_stable():
-    return join(STABLE.get())
+    return jsonify(join(STABLE.get()))
 
 
 @app.route('/api/ptb.json', methods=['GET'])
 def fetch_ptb():
-    return join(PTB.get())
+    return jsonify(join(PTB.get()))
 
 
 @app.route('/api/canary.json', methods=['GET'])
 def fetch_canary():
-    return join(CANARY.get())
+    return jsonify(join(CANARY.get()))
 
 
 @app.route('/api/all.json', methods=['GET'])
