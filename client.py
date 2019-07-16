@@ -1,10 +1,11 @@
 import asyncio
-import unittest
-import pyppeteer
+import os
 import threading
-
+import unittest
 from datetime import datetime, timedelta
 from typing import Dict, List
+
+import pyppeteer
 
 
 class VersionFetcher:
@@ -46,7 +47,14 @@ class VersionFetcherImpl(VersionFetcher):
     async def get(self):
         print(f"Fetching from {self.url}...")
         future = asyncio.get_event_loop().create_future()
-        browser = await pyppeteer.launch(headless=True)
+
+        async def launch():
+            if "DYNO" in os.environ:
+                return await pyppeteer.launch(args=["--no-sandbox", "--disable-setuid-sandbox"])
+            else:
+                return await pyppeteer.launch(headless=True)
+
+        browser = await launch()
         page = await browser.newPage()
 
         def handle_console(msg):
