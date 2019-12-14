@@ -2,6 +2,7 @@ import asyncio
 import os
 import threading
 import unittest
+import traceback
 from datetime import datetime, timedelta
 from typing import Dict, List
 
@@ -29,8 +30,11 @@ class CachedVersionFetcher(VersionFetcher):
     async def get(self):
         currentTime = datetime.now()
         if (currentTime - self.last) >= self.timeout:
-            self.cache = await self.delegation.get()
-            self.last = currentTime
+            try:
+                self.cache = await self.delegation.get()
+                self.last = currentTime
+            except pyppeteer.errors.BrowserError:
+                traceback.print_exc()
         return self.cache
 
 
